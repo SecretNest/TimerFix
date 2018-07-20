@@ -5,7 +5,9 @@ This is a complete replacement of Threading.Timer. All methods of Threading.Time
 
 Threading.Timer is encapsulated in this class.
 
-In consturctors, you could pass the interval setting value. Less the value set, more CPU time is required. Default value is 15 milliseconds.
+In constructors, you could pass the interval setting value. Less the value set, more CPU time is required. Default value is 15 milliseconds.
+
+Supported platform: NetCore 1, NetCore 2, NetFx 4, NetStd 1.3, NetStd 2.0
 
 # Nuget
 https://www.nuget.org/packages/SecretNest.TimerFix/1.0.0
