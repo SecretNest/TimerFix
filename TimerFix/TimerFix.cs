@@ -14,6 +14,7 @@ namespace SecretNest.TimerFix
         DateTime next;
         TimerCallback timerCallback;
         static TimeSpan disabled = new TimeSpan(0, 0, 0, 0, -1);
+        SpinLock spinLock = new SpinLock();
 
         /// <summary>
         /// Initializes a new instance of the TimerFix class with an infinite period and an infinite due time, using the newly created Timer object as the state object.
@@ -166,12 +167,20 @@ namespace SecretNest.TimerFix
 
         void Job(object stateInfo)
         {
-            if (DateTime.Now > next)
+            bool lockResult = false;
+            try
             {
-                timerCallback(state);
+                spinLock.Enter(ref lockResult);
+                if (DateTime.Now >= next)
+                {
+                    timerCallback(state);
 
-                var ticks = Interlocked.Read(ref periodTicks);
-                next = next.AddTicks(ticks);
+                    next = next.AddTicks(periodTicks);
+                }
+            }
+            finally
+            {
+                spinLock.Exit();
             }
         }
 
@@ -195,18 +204,27 @@ namespace SecretNest.TimerFix
 
             if (period < 0 && period != -1)
                 throw new ArgumentOutOfRangeException(nameof(period));
-            if (period == -1)
+
+            bool lockResult = false;
+            try
             {
-                Interlocked.Exchange(ref periodTicks, 0);
-                next = DateTime.Now;
-                timer.Change(dueTime, -1);
+                spinLock.Enter(ref lockResult);
+                if (period == -1)
+                {
+                    periodTicks = 0;
+                    next = DateTime.Now;
+                    timer.Change(dueTime, -1);
+                }
+                else
+                {
+                    periodTicks = period * 10000;
+                    next = DateTime.Now.AddTicks(periodTicks);
+                    timer = new Timer(Job, null, new TimeSpan(dueTime * 10000), interval);
+                }
             }
-            else
+            finally
             {
-                var periodTicks = period * 10000;
-                next = DateTime.Now.AddTicks(periodTicks);
-                Interlocked.Exchange(ref this.periodTicks, periodTicks);
-                timer = new Timer(Job, null, new TimeSpan(dueTime * 10000), interval);
+                spinLock.Exit();
             }
             return true;
         }
@@ -223,18 +241,27 @@ namespace SecretNest.TimerFix
 
             if (period < 0 && period != -1)
                 throw new ArgumentOutOfRangeException(nameof(period));
-            if (period == -1)
+
+            bool lockResult = false;
+            try
             {
-                Interlocked.Exchange(ref periodTicks, 0);
-                next = DateTime.Now;
-                timer.Change(new TimeSpan(dueTime * 10000), disabled);
+                spinLock.Enter(ref lockResult);
+                if (period == -1)
+                {
+                    periodTicks = 0;
+                    next = DateTime.Now;
+                    timer.Change(new TimeSpan(dueTime * 10000), disabled);
+                }
+                else
+                {
+                    periodTicks = period * 10000;
+                    next = DateTime.Now.AddTicks(periodTicks);
+                    timer = new Timer(Job, null, new TimeSpan(dueTime * 10000), interval);
+                }
             }
-            else
+            finally
             {
-                var periodTicks = period * 10000;
-                next = DateTime.Now.AddTicks(periodTicks);
-                Interlocked.Exchange(ref this.periodTicks, periodTicks);
-                timer = new Timer(Job, null, new TimeSpan(dueTime * 10000), interval);
+                spinLock.Exit();
             }
             return true;
         }
@@ -253,18 +280,26 @@ namespace SecretNest.TimerFix
             long periodInLong = unchecked((int)period);
             if (periodInLong < 0 && periodInLong != -1)
                 throw new ArgumentOutOfRangeException(nameof(period));
-            if (periodInLong == -1)
+            bool lockResult = false;
+            try
             {
-                Interlocked.Exchange(ref periodTicks, 0);
-                next = DateTime.Now;
-                timer.Change(new TimeSpan(dueTime * 10000), disabled);
+                spinLock.Enter(ref lockResult);
+                if (periodInLong == -1)
+                {
+                    periodTicks = 0;
+                    next = DateTime.Now;
+                    timer.Change(new TimeSpan(dueTime * 10000), disabled);
+                }
+                else
+                {
+                    periodTicks = periodInLong * 10000;
+                    next = DateTime.Now.AddTicks(periodTicks);
+                    timer = new Timer(Job, null, new TimeSpan(dueTime * 10000), interval);
+                }
             }
-            else
+            finally
             {
-                var periodTicks = (long)period * 10000;
-                next = DateTime.Now.AddTicks(periodTicks);
-                Interlocked.Exchange(ref this.periodTicks, periodTicks);
-                timer = new Timer(Job, null, new TimeSpan(dueTime * 10000), interval);
+                spinLock.Exit();
             }
             return true;
         }
@@ -283,18 +318,26 @@ namespace SecretNest.TimerFix
                 throw new ArgumentOutOfRangeException(nameof(period));
             else if (period.TotalMilliseconds > 4294967294)
                 throw new NotSupportedException(nameof(period) + " greater than 4294967294 milliseconds is not supported.");
-            if (period.TotalMilliseconds == -1)
+            bool lockResult = false;
+            try
             {
-                Interlocked.Exchange(ref periodTicks, 0);
-                next = DateTime.Now;
-                timer.Change(dueTime, new TimeSpan(0, 0, 0, -1));
+                spinLock.Enter(ref lockResult);
+                if (period.TotalMilliseconds == -1)
+                {
+                    periodTicks = 0;
+                    next = DateTime.Now;
+                    timer.Change(dueTime, new TimeSpan(0, 0, 0, -1));
+                }
+                else
+                {
+                    periodTicks = period.Ticks;
+                    next = DateTime.Now.Add(period);
+                    timer = new Timer(Job, null, dueTime, interval);
+                }
             }
-            else
+            finally
             {
-                var periodTicks = period.Ticks;
-                next = DateTime.Now.Add(period);
-                Interlocked.Exchange(ref this.periodTicks, periodTicks);
-                timer = new Timer(Job, null, dueTime, interval);
+                spinLock.Exit();
             }
             return true;
         }

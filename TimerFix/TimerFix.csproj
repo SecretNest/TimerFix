@@ -12,6 +12,9 @@
     <Copyright>Allen Cui @ Secretnest.info</Copyright>
     <PackageLicenseUrl>https://github.com/scegg/TimerFix/blob/master/LICENSE</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/scegg/TimerFix</PackageProjectUrl>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
+    <Version>1.1.0</Version>
   </PropertyGroup>
 
 
