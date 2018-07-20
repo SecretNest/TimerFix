@@ -10,4 +10,4 @@ In constructors, you could pass the interval setting value. Less the value set, 
 Supported platform: NetCore 1, NetCore 2, NetFx 4, NetStd 1.3, NetStd 2.0
 
 # Nuget
-https://www.nuget.org/packages/SecretNest.TimerFix/1.0.0
+https://www.nuget.org/packages/SecretNest.TimerFix/
