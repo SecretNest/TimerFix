@@ -1,29 +1,20 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netcoreapp1.0;netcoreapp2.0;net4;netstandard2.0;netstandard1.3</TargetFrameworks>
+    <TargetFrameworks>netcoreapp1.0;netcoreapp2.0;net45;netstandard2.0;netstandard1.3</TargetFrameworks>
     <RootNamespace>SecretNest.TimerFix</RootNamespace>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <Authors>Allen Cui</Authors>
     <Company>Secretnest.info</Company>
     <PackageId>SecretNest.TimerFix</PackageId>
-    <Description>A replacement of NetFx Threading.Timer without cumulative error</Description>
+    <Description>A replacement of NetFx Threading.Timer without cumulative error.</Description>
     <Copyright>Allen Cui @ Secretnest.info</Copyright>
     <PackageLicenseUrl>https://github.com/scegg/TimerFix/blob/master/LICENSE</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/scegg/TimerFix</PackageProjectUrl>
-    <AssemblyVersion>1.1.1.0</AssemblyVersion>
-    <FileVersion>1.1.1.0</FileVersion>
-    <Version>1.1.1</Version>
-    <PackageReleaseNotes>typo fix</PackageReleaseNotes>
-  </PropertyGroup>
-
-
-  <PropertyGroup Condition="'$(TargetFramework)' == 'netcoreapp1.0'">
-    <DefineConstants>oldcode</DefineConstants>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard1.3'">
-    <DefineConstants>oldcode</DefineConstants>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <FileVersion>2.0.0.0</FileVersion>
+    <Version>2.0</Version>
+    <PackageReleaseNotes>Upgrades to use Task instead of Timer.</PackageReleaseNotes>
   </PropertyGroup>
 </Project>
