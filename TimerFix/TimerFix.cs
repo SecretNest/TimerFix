@@ -2,32 +2,31 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace SecretNest.TimerFix
 {
+    /// <summary>
+    /// A replacement of NetFx Threading.Timer without cumulative error.
+    /// </summary>
     public class TimerFix : IDisposable
     {
-        Timer timer;
+        Task waitingJob;
+        CancellationTokenSource cancellationTokenSource;
+        CancellationToken cancellationToken;
+
         object state;
-        long periodTicks;
-        TimeSpan interval;
+        TimeSpan period;
         DateTime next;
         TimerCallback timerCallback;
-        static TimeSpan disabled = new TimeSpan(0, 0, 0, 0, -1);
-        SpinLock spinLock = new SpinLock();
 
         /// <summary>
         /// Initializes a new instance of the TimerFix class with an infinite period and an infinite due time, using the newly created Timer object as the state object.
         /// </summary>
         /// <param name="timerCallback">A TimerCallback delegate representing a method to be executed.</param>
-        /// <param name="interval">The time, in milliseconds, between checking whether the period is passed. Default value is 15.</param>
-        public TimerFix(TimerCallback timerCallback, int interval = 15)
+        public TimerFix(TimerCallback timerCallback)
         {
             this.timerCallback = timerCallback ?? throw new ArgumentNullException(nameof(timerCallback));
-            if (interval <= 0)
-                throw new ArgumentOutOfRangeException(nameof(interval)); state = null;
-            this.interval = new TimeSpan((long)interval * 10000);
-            timer = new Timer(Job, null, disabled, disabled);
         }
 
         /// <summary>
@@ -37,94 +36,13 @@ namespace SecretNest.TimerFix
         /// <param name="state">An object containing information to be used by the callback method, or null.</param>
         /// <param name="dueTime">The amount of time to delay before callback is invoked, in milliseconds. Specify Infinite to prevent the timer from starting. Specify zero (0) to start the timer immediately.</param>
         /// <param name="period">The time interval between invocations of callback, in milliseconds. Specify Infinite to disable periodic signaling.</param>
-        /// <param name="interval">The time, in milliseconds, between checking whether the period is passed. Default value is 15.</param>
-        public TimerFix(TimerCallback timerCallback, object state, int dueTime, int period, int interval = 15)
+        public TimerFix(TimerCallback timerCallback, object state, int dueTime, int period)
         {
             this.timerCallback = timerCallback ?? throw new ArgumentNullException(nameof(timerCallback));
-            if (period < 0 && period != -1)
-                throw new ArgumentOutOfRangeException(nameof(period));
-            if (interval <= 0)
-                throw new ArgumentOutOfRangeException(nameof(interval));
-            this.state = state;
-            this.interval = new TimeSpan((long)interval * 10000);
-            TimeSpan due = new TimeSpan(dueTime * 10000);
-            if (period == -1)
-            {
-                next = DateTime.Now;
-                timer = new Timer(Job, null, due, disabled);
-            }
-            else
-            {
-                periodTicks = period * 10000;
-                next = DateTime.Now.AddTicks(periodTicks);
-                timer = new Timer(Job, null, due, this.interval);
-            }
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the TimerFix class, using 64-bit signed integers to measure time intervals.
-        /// </summary>
-        /// <param name="timerCallback">A TimerCallback delegate representing a method to be execute</param>
-        /// <param name="state">An object containing information to be used by the callback method, or null.</param>
-        /// <param name="dueTime">The amount of time to delay before callback is invoked, in milliseconds. Specify Infinite to prevent the timer from starting. Specify zero (0) to start the timer immediately.</param>
-        /// <param name="period">The time interval between invocations of callback, in milliseconds. Specify Infinite to disable periodic signaling.</param>
-        /// <param name="interval">The time, in milliseconds, between checking whether the period is passed. Default value is 15.</param>
-        public TimerFix(TimerCallback timerCallback, object state, long dueTime, long period, long interval = 15)
-        {
-            this.timerCallback = timerCallback ?? throw new ArgumentNullException(nameof(timerCallback));
-            if (period < 0 && period != -1)
-                throw new ArgumentOutOfRangeException(nameof(period));
-            else if (period > 4294967294)
-                throw new NotSupportedException(nameof(period) + " greater than 4294967294 is not supported.");
-            if (interval <= 0)
-                throw new ArgumentOutOfRangeException(nameof(interval));
-            this.state = state;
-            this.interval = new TimeSpan(interval * 10000);
-            TimeSpan due = new TimeSpan(dueTime * 10000);
-            if (period == -1)
-            {
-                next = DateTime.Now;
-                timer = new Timer(Job, null, due, disabled);
-            }
-            else
-            {
-                periodTicks = period * 10000;
-                next = DateTime.Now.AddTicks(periodTicks);
-                timer = new Timer(Job, null, due, this.interval);
-            }
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the TimerFix class, using 32-bit unsigned integers to measure time intervals.
-        /// </summary>
-        /// <param name="timerCallback">A delegate representing a method to be executed.</param>
-        /// <param name="state">An object containing information to be used by the callback method, or null.</param>
-        /// <param name="dueTime">The amount of time to delay before callback is invoked, in milliseconds. Specify Infinite to prevent the timer from starting. Specify zero (0) to start the timer immediately.</param>
-        /// <param name="period">The time interval between invocations of callback, in milliseconds. Specify Infinite to disable periodic signaling.</param>
-        /// <param name="interval">The time, in milliseconds, between checking whether the period is passed. Default value is 15.</param>
-        [System.CLSCompliant(false)]
-        public TimerFix(TimerCallback timerCallback, object state, uint dueTime, uint period, uint interval = 15)
-        {
-            this.timerCallback = timerCallback ?? throw new ArgumentNullException(nameof(timerCallback));
-            if (interval == 0)
-                throw new ArgumentOutOfRangeException(nameof(interval));
-            long periodInLong = unchecked((int)period);
-            if (periodInLong < 0 && periodInLong != -1)
+            if (period <= 0 && period != -1)
                 throw new ArgumentOutOfRangeException(nameof(period));
             this.state = state;
-            this.interval = new TimeSpan((long)interval * 10000);
-            TimeSpan due = new TimeSpan(dueTime * 10000);
-            if (periodInLong == -1)
-            {
-                next = DateTime.Now;
-                timer = new Timer(Job, null, due, disabled);
-            }
-            else
-            {
-                periodTicks = (long)period * 10000;
-                next = DateTime.Now.AddTicks(periodTicks);
-                timer = new Timer(Job, null, due, this.interval);
-            }
+            StartJob(dueTime, new TimeSpan(0, 0, 0, 0, period));
         }
 
         /// <summary>
@@ -134,53 +52,102 @@ namespace SecretNest.TimerFix
         /// <param name="state">An object containing information to be used by the callback method, or null.</param>
         /// <param name="dueTime">The amount of time to delay before the callback parameter invokes its methods. Specify negative one (-1) milliseconds to prevent the timer from starting. Specify zero (0) to start the timer immediately.</param>
         /// <param name="period">The time interval between invocations of the methods referenced by callback. Specify negative one (-1) milliseconds to disable periodic signaling.</param>
-        /// <param name="interval">The time between checking whether the period is passed. Default value is 15 milliseconds.</param>
-        public TimerFix(TimerCallback timerCallback, object state, TimeSpan dueTime, TimeSpan period, TimeSpan? interval)
+        public TimerFix(TimerCallback timerCallback, object state, TimeSpan dueTime, TimeSpan period)
         {
-            TimeSpan intervalValue;
-            if (interval.HasValue)
-                intervalValue = interval.Value;
-            else
-                intervalValue = new TimeSpan(150000);
-
             this.timerCallback = timerCallback ?? throw new ArgumentNullException(nameof(timerCallback));
-            if (period < TimeSpan.Zero && period.TotalMilliseconds != -1)
+            if (period <= TimeSpan.Zero && period.TotalMilliseconds != -1)
                 throw new ArgumentOutOfRangeException(nameof(period));
-            else if (period.TotalMilliseconds > 4294967294)
-                throw new NotSupportedException(nameof(period) + " greater than 4294967294 milliseconds is not supported.");
-            if (intervalValue <= TimeSpan.Zero)
-                throw new ArgumentOutOfRangeException(nameof(interval));
             this.state = state;
-            this.interval = intervalValue;
+            StartJob(dueTime, period);
+        }
+
+            
+        void StartJob(TimeSpan dueTime, TimeSpan period)
+        {
+            next = DateTime.Now.Add(dueTime);
+            StartJobWithNoDueTimeSet(period);
+        }
+
+        void StartJob(int dueTime, TimeSpan period)
+        {
+            next = DateTime.Now.AddMilliseconds(dueTime);
+            StartJobWithNoDueTimeSet(period);
+        }
+
+        void StartJobWithNoDueTimeSet(TimeSpan period)
+        {
+            cancellationTokenSource = new CancellationTokenSource();
+            cancellationToken = cancellationTokenSource.Token;
             if (period.TotalMilliseconds == -1)
             {
-                next = DateTime.Now;
-                timer = new Timer(Job, null, dueTime, disabled);
+                waitingJob = Task.Run(async () => await OnceJob());
             }
             else
             {
-                periodTicks = period.Ticks;
-                next = DateTime.Now.AddTicks(periodTicks);
-                timer = new Timer(Job, null, dueTime, this.interval);
+                this.period = period;
+                waitingJob = Task.Run(async () => await Job());
             }
         }
 
-        void Job(object stateInfo)
+        async Task Job()
         {
-            bool lockResult = false;
             try
             {
-                spinLock.Enter(ref lockResult);
-                if (DateTime.Now >= next)
+                while (!cancellationToken.IsCancellationRequested)
                 {
-                    timerCallback(state);
+                    var delay = next - DateTime.Now;
+                    if (delay > TimeSpan.Zero)
+                    {
+                        await Task.Delay(delay, cancellationToken);
+                    }
 
-                    next = next.AddTicks(periodTicks);
+                    if (!cancellationToken.IsCancellationRequested)
+                    {
+                        await Task.Run(() => timerCallback(state), cancellationToken);
+                    }
+                    next = next.Add(period);
                 }
             }
-            finally
+            catch (TaskCanceledException) { }
+            waitingJob = null;
+        }
+
+        async Task OnceJob()
+        {
+            var delay = next - DateTime.Now;
+
+            try
             {
-                spinLock.Exit();
+                if (delay > TimeSpan.Zero)
+                {
+                    await Task.Delay(delay, cancellationToken);
+                }
+
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    await Task.Run(() => timerCallback(state), cancellationToken);
+                }
+            }
+            catch (TaskCanceledException) { }
+            waitingJob = null;
+        }
+
+        object stopLock = new object();
+        void StopCurrentJob()
+        {
+            lock (stopLock)
+            {
+                if (waitingJob != null)
+                {
+                    cancellationTokenSource.Cancel();
+
+                    while (waitingJob != null)
+                    {
+                        Task.Delay(100).Wait();
+                    }
+
+                    cancellationTokenSource = null;
+                }
             }
         }
 
@@ -202,105 +169,12 @@ namespace SecretNest.TimerFix
         {
             if (disposedValue) throw new ObjectDisposedException(GetType().FullName);
 
-            if (period < 0 && period != -1)
+            if (period <= 0 && period != -1)
                 throw new ArgumentOutOfRangeException(nameof(period));
 
-            bool lockResult = false;
-            try
-            {
-                spinLock.Enter(ref lockResult);
-                if (period == -1)
-                {
-                    periodTicks = 0;
-                    next = DateTime.Now;
-                    timer.Change(dueTime, -1);
-                }
-                else
-                {
-                    periodTicks = period * 10000;
-                    next = DateTime.Now.AddTicks(periodTicks);
-                    timer = new Timer(Job, null, new TimeSpan(dueTime * 10000), interval);
-                }
-            }
-            finally
-            {
-                spinLock.Exit();
-            }
-            return true;
-        }
+            StopCurrentJob();
+            StartJob(dueTime, new TimeSpan(0, 0, 0, 0, period));
 
-        /// <summary>
-        /// Changes the start time and the interval between method invocations for a timer, using 64-bit signed integers to measure time intervals.
-        /// </summary>
-        /// <param name="dueTime">The amount of time to delay before the invoking the callback method specified when the Timer was constructed, in milliseconds. Specify Infinite to prevent the timer from restarting. Specify zero (0) to restart the timer immediately.</param>
-        /// <param name="period">The time interval between invocations of the callback method specified when the Timer was constructed, in milliseconds. Specify Infinite to disable periodic signaling.</param>
-        /// <returns>true if the timer was successfully updated; otherwise, false. Actually, only true will be returned.</returns>
-        public bool Change(long dueTime, long period)
-        {
-            if (disposedValue) throw new ObjectDisposedException(GetType().FullName);
-
-            if (period < 0 && period != -1)
-                throw new ArgumentOutOfRangeException(nameof(period));
-
-            bool lockResult = false;
-            try
-            {
-                spinLock.Enter(ref lockResult);
-                if (period == -1)
-                {
-                    periodTicks = 0;
-                    next = DateTime.Now;
-                    timer.Change(new TimeSpan(dueTime * 10000), disabled);
-                }
-                else
-                {
-                    periodTicks = period * 10000;
-                    next = DateTime.Now.AddTicks(periodTicks);
-                    timer = new Timer(Job, null, new TimeSpan(dueTime * 10000), interval);
-                }
-            }
-            finally
-            {
-                spinLock.Exit();
-            }
-            return true;
-        }
-
-        /// <summary>
-        /// Changes the start time and the interval between method invocations for a timer, using 32-bit unsigned integers to measure time intervals.
-        /// </summary>
-        /// <param name="dueTime">The amount of time to delay before the invoking the callback method specified when the Timer was constructed, in milliseconds. Specify Infinite to prevent the timer from restarting. Specify zero (0) to restart the timer immediately.</param>
-        /// <param name="period">The time interval between invocations of the callback method specified when the Timer was constructed, in milliseconds. Specify Infinite to disable periodic signaling.</param>
-        /// <returns>true if the timer was successfully updated; otherwise, false. Actually, only true will be returned.</returns>
-        [System.CLSCompliant(false)]
-        public bool Change(uint dueTime, uint period)
-        {
-            if (disposedValue) throw new ObjectDisposedException(GetType().FullName);
-
-            long periodInLong = unchecked((int)period);
-            if (periodInLong < 0 && periodInLong != -1)
-                throw new ArgumentOutOfRangeException(nameof(period));
-            bool lockResult = false;
-            try
-            {
-                spinLock.Enter(ref lockResult);
-                if (periodInLong == -1)
-                {
-                    periodTicks = 0;
-                    next = DateTime.Now;
-                    timer.Change(new TimeSpan(dueTime * 10000), disabled);
-                }
-                else
-                {
-                    periodTicks = periodInLong * 10000;
-                    next = DateTime.Now.AddTicks(periodTicks);
-                    timer = new Timer(Job, null, new TimeSpan(dueTime * 10000), interval);
-                }
-            }
-            finally
-            {
-                spinLock.Exit();
-            }
             return true;
         }
 
@@ -314,31 +188,12 @@ namespace SecretNest.TimerFix
         {
             if (disposedValue) throw new ObjectDisposedException(GetType().FullName);
 
-            if (period < TimeSpan.Zero && period.TotalMilliseconds != -1)
+            if (period <= TimeSpan.Zero && period.TotalMilliseconds != -1)
                 throw new ArgumentOutOfRangeException(nameof(period));
-            else if (period.TotalMilliseconds > 4294967294)
-                throw new NotSupportedException(nameof(period) + " greater than 4294967294 milliseconds is not supported.");
-            bool lockResult = false;
-            try
-            {
-                spinLock.Enter(ref lockResult);
-                if (period.TotalMilliseconds == -1)
-                {
-                    periodTicks = 0;
-                    next = DateTime.Now;
-                    timer.Change(dueTime, new TimeSpan(0, 0, 0, -1));
-                }
-                else
-                {
-                    periodTicks = period.Ticks;
-                    next = DateTime.Now.Add(period);
-                    timer = new Timer(Job, null, dueTime, interval);
-                }
-            }
-            finally
-            {
-                spinLock.Exit();
-            }
+
+            StopCurrentJob();
+            StartJob(dueTime, period);
+
             return true;
         }
 
@@ -351,28 +206,13 @@ namespace SecretNest.TimerFix
             {
                 if (disposing)
                 {
-                    timer.Dispose();
+                    StopCurrentJob();
                 }
-                timer = null;
+                stopLock = null;
                 timerCallback = null;
                 disposedValue = true;
             }
         }
-
-#if !oldcode
-        /// <summary>
-        /// Releases all resources used by the current instance of TimerFix and signals when the timer has been disposed of.
-        /// </summary>
-        /// <param name="notifyObject">The WaitHandle to be signaled when the Timer has been disposed of.</param>
-        /// <returns>true if the function succeeds; otherwise, false.</returns>
-        public bool Dispose(WaitHandle notifyObject)
-        {
-            var result = timer.Dispose(notifyObject);
-            Dispose(false);
-            return result;
-        }
-#endif
-
 
         /// <summary>
         /// Releases all resources used by the current instance of TimerFix.
